@@ -1,0 +1,674 @@
+---
+title: "Data for: Do experimental pH increases alter the structure and function of a lowland tropical stream?"
+author: "Nicholas S. Marzolf"
+date: "Updated June 4, 2021"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: 
+      collapsed: true
+      smooth_scroll: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+RMarkdown file to accompany "Do experimental pH increases alter the structure and function of a lowland tropical stream?". This file contains the data files to recreate Tables 2-4 and Figures 2-6. The section for each figure loads in the appropriate data file to conduct the analysis and/or recreate the figure.
+
+To recreate this HTML, load the data files into a folder named 'Data' at the same path as the .rmd file, open the .rmd file, and click 'Knit'.
+
+# Load packages
+```{r load-packages, echo = TRUE, message=FALSE, warning = FALSE}
+library(dplyr)     # data manipulation
+library(tidyr)     # data manipulation
+library(ggplot2)   # visualization
+library(lubridate) # manage timestamps
+library(cowplot)   # multipane figures
+library(agricolae) # Tukey HSD test
+library(ggsci)     # ggplot colors
+library(moments)   # normality
+library(emmeans)   # Estimated marginal means
+library(car)       # Anova() function
+library(effsize)   # Hedge's g effect size for low sample sizes
+library(ARTool)    # Align rank transform test
+library(vegan)     # Non-metric dimensional scaling
+library(ggrepel)   # visualization
+library(pander)    # session info
+```
+
+# Table 2
+Nutrients collected weekly in the 4 reaches during the 5 week experiment. 
+```{r, nut-summary, warning=FALSE, echo=TRUE}
+nutrients = read.csv('Data/nutrients.csv')     # nutrient data
+
+nutrients %>%
+  mutate(din = NOx_N + NH4_N,
+         din_srp = (din/14.007)/(PO4_P/30.9737)
+         ) %>%
+  group_by(Reaches) %>%
+  summarise(mean_NO3 = mean(NOx_N*1000),
+            se_NO3 = sd(NOx_N*1000)/sqrt(length(NOx_N)),
+            corNO3 = cor(y = NOx_N*1000, x = rep(1:6, 3), method = "kendall"),
+            mean_NH4 = mean(NH4_N*1000),
+            se_NH4 = sd(NH4_N*1000)/sqrt(length(NH4_N)),
+            corNH4 = cor(y = NH4_N*1000, x = rep(1:6, 3), method = "kendall"),
+            mean_PO4 = mean(PO4_P*1000),
+            se_PO4 = sd(PO4_P*1000)/sqrt(length(PO4_P)),
+            corPO4 = cor(y = PO4_P*1000, x = rep(1:6, 3), method = "kendall"),
+            mean_NP = mean(din_srp),
+            se_NP = sd(din_srp)/sqrt(length(din_srp)),
+            corNP = cor(y = din_srp, x = rep(1:6, 3), method = "kendall"))
+
+```
+
+# Table 3
+Chironomid experiment data
+```{r chiro-survial, message=FALSE, warning=FALSE}
+chiroGrowth = read.csv('Data/chiroGrowth.csv') # Chironomid growth
+
+chiroGrowth$Reach = factor(chiroGrowth$Reach)
+
+chiroGrowth %>% 
+  group_by(Reach) %>%
+  summarise(biomass_mean = mean(biomassFin_mg, na.rm = TRUE),
+            biomass_se = sd(biomassFin_mg, na.rm = TRUE)/sqrt(length(biomassFin_mg)),
+            per_biomass_mean = mean(delBiomass_per, na.rm = TRUE),
+            per_biomass_se = sd(delBiomass_per, na.rm = TRUE)/sqrt(length(biomassFin_mg)),
+            per_surv_mean = mean((numSurv/6)*100, na.rm = TRUE),
+            per_surv_se = sd((numSurv/6)*100, na.rm = TRUE)/sqrt(length(biomassFin_mg)))
+```
+
+
+# Figure 2
+Rainfall and pH time-series in the four reaches
+```{r Fig2, echo=TRUE, warning=FALSE, results='hide'}
+
+# load the sensor data
+CarDown = read.csv('Data/CarDown.csv') # YSI EXO1 data- Carapa downstream
+CarUp = read.csv('Data/CarUp.csv')     # YSI EXO1 data- Carapa upstream
+ArbDown = read.csv('Data/ArbDown.csv') # YSI EXO1 data- ArbSeep downstream
+ArbUp = read.csv('Data/ArbUp.csv')     # YSI EXO1 data- ArbSeep upstream
+
+# hyetographs for the 4 reaches
+ArbUp_rain = ggplot(ArbUp, aes(x = as.POSIXct(Timestamp), y = Rainfall))+
+  geom_bar(stat = 'identity', color = 'black')+
+  ylim(30, 0)+
+  scale_x_datetime(date_breaks = "7 day",
+                   limits = as.POSIXct(c("2019-08-13", "2019-09-25")),
+                   date_labels = "%m/%d/%y")+
+  annotate('text', x = as.POSIXct("2019-08-21"), y = 29,
+           label = "Total Rainfall = 514.3 mm", fontface = 3)+
+  theme(axis.title.x = element_blank(),
+              axis.text.x = element_blank(),
+              axis.text.y = element_text(size = 10, face = 'bold'))
+ArbUp_rain
+
+ArbDown_rain = ggplot(ArbDown, 
+                      aes(x = as.POSIXct(Timestamp), y = Rainfall))+
+  geom_bar(stat = 'identity', 
+           color = 'black')+
+  ylim(15, 0)+
+  ylab("Rainfall")+
+  scale_x_datetime(date_breaks = "5 day",
+                   date_labels = "%m/%d/%y",
+                   limits = as.POSIXct(c("2018-06-18", "2018-07-18")))+
+  annotate('text', x = as.POSIXct("2018-06-24"), y = 14.5,
+           label = "Total Rainfall = 1280 mm", fontface = 3)+
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 10))
+ArbDown_rain
+
+CarDown_rain = ggplot(data = CarDown, aes(x = as.POSIXct(Timestamp), y = Rainfall))+
+  geom_bar(stat = 'identity', 
+           color = 'black')+
+  ylim(15, 0)+
+  ylab("Rainfall")+
+  scale_x_datetime(date_breaks = "4 day",
+                   limits = as.POSIXct(c("2018-06-27", "2018-07-20")))+
+  annotate('text', x = as.POSIXct("2018-07-03"), y = 14.25,
+           label = "Total Rainfall = 1129 mm", 
+           fontface = 3)+
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 10, face = 'bold'))
+CarDown_rain
+
+CarUp_rain = ggplot(CarUp, aes(x = as.POSIXct(Timestamp), y = Rainfall))+
+  geom_bar(stat = 'identity', color = 'black')+
+  ylim(30, 0)+
+  scale_x_datetime(date_breaks = "7 day",
+                   limits = as.POSIXct(c("2019-08-13", "2019-09-25")))+
+  annotate('text', x = as.POSIXct("2019-08-21"), y = 28,
+           label = "Total Rainfall = 514.3 mm", 
+           fontface = 3)+
+  theme(axis.title.x = element_blank(),
+              axis.text.x = element_blank(),
+              axis.text.y = element_text(size = 10, face = 'plain'))
+CarUp_rain
+
+# pH time-series in the 4 reaches
+ArbDown_pH = ggplot(data = ArbDown, 
+                    aes(x = as.POSIXct(Timestamp)))+
+  geom_point(aes(y = pH))+
+  geom_segment(aes(x = as.POSIXct("2018-07-14"), 
+                   xend = as.POSIXct("2018-07-18"), 
+                   y = 6.39, yend = 6.39),
+               color = 'black', size = 2)+
+  ylim(5.8, 6.4)+
+  ylab("pH")+
+  theme(axis.text = element_text(size = 10),
+        axis.title.x = element_blank())+
+  scale_x_datetime(date_breaks = "5 day",
+                   date_labels = "%m/%d/%y",
+                   limits = as.POSIXct(c("2018-06-18", "2018-07-18")))
+ArbDown_pH
+
+ArbUp_pH = ggplot(ArbUp, 
+                  aes(x = as.POSIXct(Timestamp), y = pH))+
+  geom_point()+
+  scale_y_continuous(limits = c(4, 5.75))+
+  scale_x_datetime(date_breaks = "7 day",
+                   limits = as.POSIXct(c("2019-08-13", "2019-09-25")),
+                   date_labels = "%m/%d/%y")+
+  ylab("pH")+
+  theme(axis.text = element_text(size = 10),
+        axis.title.x = element_blank())
+ArbUp_pH
+
+CarUp_pH = ggplot(CarUp, aes(x = as.POSIXct(Timestamp), y = pH))+
+  geom_point()+
+  scale_y_continuous(limits = c(4, 5.8))+
+  scale_x_datetime(date_breaks = "7 day",
+                   limits = as.POSIXct(c("2019-08-13", "2019-09-25")),
+                   date_labels = "%m/%d/%y")+
+  theme(axis.text = element_text(size = 10),
+        axis.title.x = element_blank())
+CarUp_pH
+
+CarDown_pH = ggplot(data = CarDown, 
+                    aes(x = as.POSIXct(Timestamp)))+
+  geom_point(aes(y = pH))+
+  labs(y = "pH")+
+  ylim(4.5, 8)+
+  scale_x_datetime(date_breaks = "4 day",
+                   date_labels = "%m/%d/%y",
+                   limits = as.POSIXct(c("2018-06-27", "2018-07-20")))+
+  theme(axis.text = element_text(size = 10),
+        axis.title.x = element_blank())
+CarDown_pH
+
+# paired histograms
+Car_pairedHist = ggplot()+
+  geom_histogram(data = CarUp, bins = 200, alpha = 0.75,
+                 aes(x = pH, fill = 'Upstream'))+
+  geom_histogram(data = CarDown, bins = 200, alpha = 0.75,
+                 aes(x = pH, fill = 'Downstream'))+
+  xlim(4, 8)+
+  ylim(0, 600)+
+  ylab("Count")+
+  scale_fill_manual(labels = c("Upstream", "Downstream"),
+                    breaks = c("Upstream", "Downstream"),
+                    values = c("grey50", "grey20"),
+                    name = element_blank())+
+  theme(legend.justification = c(0.75,0.75),
+        legend.position = c(0.9,0.9),
+        legend.text = element_text(face = 'plain'),
+        legend.background = element_rect(fill = NA),
+        axis.text = element_text(size = 10))
+Car_pairedHist
+
+Arb_pairedHist = ggplot()+
+  geom_histogram(data = ArbUp, bins = 200, alpha = 0.75,
+                 aes(x = pH, fill = 'Upstream'))+
+  geom_histogram(data = ArbDown, bins = 200, alpha = 0.75,
+                 aes(x = pH, fill = 'Downstream'))+
+  xlim(4, 8)+
+  ylim(0, 600)+
+  ylab("Count")+
+  xlab("pH")+
+  scale_fill_manual(labels = c("Upstream", "Downstream"),
+                    breaks = c("Upstream", "Downstream"),
+                    values = c("grey50", "grey20"),
+                    name = element_blank())+
+  theme(legend.justification = c(0.75,0.75),
+        legend.position = c(0.9,0.9),
+        legend.text = element_text(face = 'plain'),
+        legend.background = element_rect(fill = NA),
+        axis.text = element_text(size = 10))
+Arb_pairedHist
+
+# combine into Fig 2
+plot_grid(CarUp_rain, ArbUp_rain,
+          CarUp_pH, ArbUp_pH,
+          CarDown_rain, ArbDown_rain,
+          CarDown_pH, ArbDown_pH,
+          Car_pairedHist, Arb_pairedHist,
+          ncol = 2, nrow = 5, align = 'hv')
+```
+
+# Figure 3
+Leaf litter and coarse woody debris decomposition rates.
+```{r Fig3, echo = TRUE, warning = FALSE}
+OM = read.csv('Data/OM.csv')                   # leaf litter and coarse woody debris decomposition rate data
+
+OM$Reach = factor(OM$Reach,
+                  levels = c('ArbSeep Upstream',
+                             'ArbSeep Downstream',
+                             'Carapa Upstream',
+                             'Carapa Downstream'))
+
+# leaf litter boxplot; letters are Tukey post-hoc test
+LL = ggplot(OM, aes(x = Reach, y = k_LL_d))+
+  geom_boxplot(aes(fill = Bag_mesh))+
+  ylab(expression(paste(k[LL], " (", d^-1, ")")))+
+  scale_y_continuous(limits = c(0.025, 0.055),
+                     breaks = c(0.025, 0.035, 0.045, 0.055))+
+  scale_fill_jco(name = "Mesh Size")+
+  annotate('text', x = c(1,2,3,4), y = 0.0275, label = "a")+
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_blank())
+LL
+
+# woody debris boxplot
+CWD = ggplot(OM, aes(x = Reach, y = k_CWD_yr))+
+  geom_boxplot(aes(fill = Bag_mesh))+
+  ylab(expression(paste(k[CWD], " (", yr^-1, ")")))+
+  scale_y_continuous(limits = c(0, 3.3),
+                     breaks = c(0, 1.1, 2.2, 3.3))+
+  scale_fill_jco(name = "Mesh Size")+
+  annotate('text', x = c(1,2,3,4), y = 0.1, label = c("a", "a", "b", "b"))+
+  theme(legend.position = c(.85, .8),
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_blank())
+CWD
+
+# combine plots
+plot_grid(LL, CWD, 
+          ncol = 2, 
+          labels = 'auto',
+          align = 'hv')
+```
+
+# Figure 4
+Macroinvertebrate abundance per g of organic matter AFDM
+```{r macros-long-plot, warning=FALSE, echo=TRUE}
+macros = read.csv('Data/macroinverts.csv')     # macroinvertebrate abundance for W1 and W5 data
+
+# assign NAs to 0
+macros[is.na(macros)] <- 0
+
+# Family counts
+glimpse(macros)
+
+# Make factors
+macros$Week = factor(macros$Week)
+macros$Organic_Type = factor(macros$Organic_Type)
+macros$Mesh_Size = factor(macros$Mesh_Size)
+
+# Subset data
+macro_fam = 
+  macros %>%
+  select(Sample:Reach, Chironomidae:Water.Mite) %>%
+  mutate(Reaches = factor(interaction(Site, Reach, sep = ' '))) %>%
+  rename(OM = Organic_Type,
+         Mesh = Mesh_Size)
+
+macro_fam$Reaches = ordered(macro_fam$Reaches, 
+                              levels = c("Carapa Upstream", "Carapa Downstream", 
+                                         "ArbSeep Upstream", "ArbSeep Downstream"))
+
+
+# convert data to mean abundance by family for LL litter bags
+mean_fam_abun_LL = macro_fam %>% 
+  dplyr::rowwise(Sample) %>% 
+  dplyr::mutate(sum = rowSums(across(Chironomidae:Water.Mite))) %>%
+  dplyr::group_by(Week, OM, Mesh, Reaches) %>%
+  dplyr::summarise(mean = mean(sum),
+            se = sd(sum)/sqrt(length(sum)),
+            len = length(sum)) %>%
+  dplyr::filter(OM == 'Leaf')
+
+# these data are the leaf litter AFDM remaining at Week 5 from the OM data file. Here, I load them in as a new column
+mean_fam_abun_LL$LL_AFDM = c(4.4, 3.97, 4.28, 4.33, 4.07, 4.07, 4.4, 3.93,
+                             0.59, 1.14, 0.91, 1.22, 0.63, 1.13, 0.91, 1.12)
+
+# calculate the mean family abundance per g AFMD remaining
+mean_fam_abun_LL = mean_fam_abun_LL %>%
+  mutate(mean_abund_AFDM = mean/LL_AFDM,
+         se_abund_AFDM = se/LL_AFDM)
+  
+# plot mean family abundance per g AFDM remaining
+abundance_LL = ggplot(data = mean_fam_abun_LL, 
+                      aes(x = Week, y = mean_abund_AFDM))+
+  geom_point(size = 3)+
+  geom_errorbar(aes(ymin = mean_abund_AFDM - se_abund_AFDM, 
+                    ymax = mean_abund_AFDM + se_abund_AFDM),
+                width = 0.2)+
+  facet_grid(Mesh ~ Reaches)+
+  scale_y_continuous(limit = c(0, 200),
+                     breaks = c(0, 50, 100, 150, 200),
+                     labels = c(0, 50, 100, 150, 200))+
+  #scale_y_log10(limit = c(0.1, 300),
+  #              breaks = c(0.1, 1, 10, 100, 300),
+  #              labels = c(0.1, 1, 10, 100, 300))+
+  ylab(expression(paste("Mean abundance (# g LL   ", AFDM^-1,")")))+
+  theme(strip.background = element_rect(color = "black", fill = "white"),
+        strip.text = element_text(color = "black"))
+
+# repeat the calculation for CWD litter bags
+mean_fam_abun_CWD = macro_fam %>% 
+  dplyr::rowwise(Sample) %>% 
+  mutate(sum = rowSums(across(Chironomidae:Water.Mite))) %>%
+  group_by(Week, OM, Mesh, Reaches) %>%
+  summarise(mean = mean(sum),
+            se = sd(sum)/sqrt(length(sum))) %>%
+  filter(OM == 'Wood')
+
+# these are the CWD AFDM data, as described above
+mean_fam_abun_CWD$CWD_AFDM = c(36.8, 30.8, 38.3, 34.7, 40.2, 30.7, 40.9, 34.8,
+                               35.6, 28.6, 25.8, 28.4, 23.7, 29.2, 24.4, 29.6)
+
+# calculate mean family abundance per g AFDM
+mean_fam_abun_CWD = mean_fam_abun_CWD %>%
+  mutate(mean_abund_AFDM = mean/CWD_AFDM,
+         se_abund_AFDM = se/CWD_AFDM)
+
+# create the plot
+abundance_CWD = ggplot(data = mean_fam_abun_CWD, 
+                       aes(x = Week, y = mean_abund_AFDM))+
+  geom_point(size = 3)+
+  geom_errorbar(aes(ymin = mean_abund_AFDM - se_abund_AFDM, 
+                    ymax = mean_abund_AFDM + se_abund_AFDM),
+                width = 0.2)+
+  facet_grid(Mesh ~ Reaches)+
+  scale_y_continuous(limit = c(-1, 8),
+                     breaks = c(0, 2, 4, 6, 8),
+                     labels = c(0, 2, 4, 6, 8))+
+  ylab(expression(paste("Mean abundance (# g CWD   ", AFDM^-1,")")))+
+  theme(strip.background = element_rect(color = "black", fill = "white"),
+        strip.text = element_text(color = "black"))
+
+# combine OM abundance plots
+plot_grid(abundance_LL, abundance_CWD, align = 'hv',
+          nrow = 2, 
+          labels = 'auto', label_fontface = 'plain',
+          hjust = -5, vjust = 0.65)
+
+```
+
+# Figure 5
+Species richness
+```{r spec-richness, warning=FALSE, echo=TRUE}
+macro_fam$numFam = specnumber(select(macro_fam, Chironomidae:Water.Mite))
+
+divFam = ggplot(macro_fam, aes(x = Week, y = numFam, fill = OM))+
+  geom_boxplot()+
+  facet_grid(Mesh ~ Reaches)+
+  ylab("Richness")+
+  theme_classic()+
+  scale_fill_jco()+
+  ylim(0, 13)+
+  theme(strip.background = element_rect(color = "black", fill = "white"),
+        strip.text = element_text(color = "black", face = 'bold'))
+divFam
+```
+
+# Figure 6
+Non-metric dimensional scaling of the various treatments in the experiment
+```{r NMDS, warning=FALSE, echo=TRUE}
+macro_fam_W5 = macro_fam %>%
+  select(-numFam) %>% 
+  filter(Week == 'W5') %>%
+  mutate_at(vars(Chironomidae:Water.Mite), 
+            funs(log10(1+.)))
+
+nmds = metaMDS(macro_fam_W5 %>%
+                 select(Chironomidae:Water.Mite),
+               distance = 'bray',     # Bray-Curtis dissimilarity index
+               k = 3,                 # specify 3 dimensions
+               autotransform = FALSE) # we did this manually
+nmds$stress # 0.17, not too bad
+```
+
+Now let's begin the visualization process. First, we will extract points from the ordination and bind them to the experimental treatment data not run in the NMDS matrix. We will then look at the taxa that are driving the dissimilarity in the matrix and plot the vectors on the NMDS points
+```{r nmds-env-vectors, warning=FALSE, echo = TRUE}
+df = data.frame(x = nmds$points[,1],
+                y = nmds$points[,2],
+                z = nmds$points[,3])
+df = cbind(macro_fam_W5[,c(1:6, 41)],
+           df)
+
+fit = (envfit(nmds, macro_fam_W5[,-c(1:6)],
+              perm = 9999))
+scrs = as.data.frame(scores(fit, 'vectors'))
+scrs$pvals = fit$vector$pvals
+scrs_sig = subset(scrs, pvals <= 0.05)
+scrs_sig$env.variables = row.names(scrs_sig)
+
+# plot nmds with significant family vectors
+nmds_vect = ggplot(data = df, aes(x = x, y = y))+                             
+  geom_point(size = 3) + 
+  geom_segment(data = scrs_sig,
+               aes(x = 0, xend = NMDS1, 
+                   y = 0, yend = NMDS2),
+               arrow = arrow(length = unit(0.25, "cm")), 
+               colour = "black") +
+  geom_label_repel(data = scrs_sig, 
+                   aes(NMDS1, NMDS2, label = env.variables),
+                   size = 3)+
+  labs(x = "NMDS axis 1", y = "NMDS axis 2")+
+  annotate("text", label = "Stress = 0.17", x = -0.85, y = -1.4, fontface = 3)+
+  theme_classic()+
+  lims(x = c(-1, 1), y = c(-1.5, 1))
+nmds_vect
+```
+
+Now we will calculate 95% confidence interval ellipses for the four study reaches, two mesh bag sizes, and 2 organic matter types, and plot the ellipses on the NMDS to determine the similarity of the assemblage as explained by those treatments. We will need the veganCovEllipse.R function to help us. Briefly, we will create a dummy data frame that is run through a for loop that calculates the 95% CI ellipse for the treatment factor of interest. For the sake of space, I will show the process for the first 2 axes (x and y) but can repeated to visualize the NMDS using other axes (substitute y for x to change from axis 2 to 1, and substitute z for y to change from axis 2 to axis 3):
+```{r, nmds-ellipses, warning=FALSE, echo=TRUE}
+
+source('veganCovEllipse.R')
+
+ell_reaches_12 = data.frame() # create a dummy data frame for ellipses based on reach for axes 1 and 2
+
+for(g in unique(df$Reaches)) {
+  ell_reaches_12 <- rbind(ell_reaches_12,
+                          cbind(
+                            as.data.frame(
+                              with(df[df$Reaches == g,],
+                                   veganCovEllipse(cov.wt(cbind(x, y),
+                                                          wt = rep(1/length(x),
+                                                                   length(x)))$cov,
+                                                   center = c(mean(x),
+                                                              mean(y)
+                                                              )
+                                                   )
+                                   )
+                              ), 
+                            Reaches = g)
+                          )
+}
+
+# repeat for OM and Mesh treatments
+ell_OM_12 = data.frame()
+
+for(g in unique(df$OM)) {
+  ell_OM_12 <- rbind(ell_OM_12,
+                     cbind(
+                       as.data.frame(
+                         with(df[df$OM == g,],
+                              veganCovEllipse(cov.wt(cbind(x, y),
+                                                     wt = rep(1/length(x),
+                                                              length(x)))$cov,
+                                              center = c(mean(x),
+                                                         mean(y)
+                                                         )
+                                              )
+                              )
+                         ),
+                       OM = g)
+                     )
+}
+
+ell_mesh_12 = data.frame()
+for(g in unique(df$Mesh)) {
+  ell_mesh_12 <- rbind(ell_mesh_12,
+                     cbind(
+                       as.data.frame(
+                         with(df[df$Mesh == g,],
+                              veganCovEllipse(cov.wt(cbind(x, y),
+                                                     wt = rep(1/length(x),
+                                                              length(x)))$cov,
+                                              center = c(mean(x),
+                                                         mean(y)
+                                                         )
+                                              )
+                              )
+                         ),
+                       Mesh = g)
+                     )
+}
+
+```
+
+Now we will plot the NMDS using the 95% CI ellipses we just calculated for reaches, organic matter, and mesh size. Then, we will combine the plots into Figure 6
+```{r nmds-plots, warning = FALSE, echo = TRUE}
+# by reach
+nmds_reaches = ggplot(data = df, 
+                           aes(x = x, y = y))+                             
+  geom_point(size = 2, aes(color = Reaches)) + 
+  geom_path(data = ell_reaches_12, 
+            aes(x = x, y = y, color = Reaches),
+            size = 1)+
+  labs(x = "NMDS axis 1", 
+       y = "NMDS axis 2")+
+  guides(color = guide_legend(ncol = 2))+
+  theme(legend.position = c(0.6, 0.1),
+        legend.background = element_blank(),
+        legend.direction = 'horizontal')+
+  scale_color_jco(name = element_blank())+
+  lims(x = c(-1, 1), y = c(-1.5, 1))
+nmds_reaches
+
+# by organic matter type
+nmds_OM = ggplot(data = df, 
+                           aes(x = x, y = y))+                             
+  geom_point(size = 2, aes(color = OM)) + 
+  geom_path(data = ell_OM_12, 
+            aes(x = x, y = y, color = OM),
+            size = 1)+
+  labs(x = "NMDS axis 1", 
+       y = "NMDS axis 2")+
+  guides(color = guide_legend(ncol = 2))+
+  theme(legend.position = c(0.6, 0.1),
+        legend.background = element_blank(),
+        legend.direction = 'horizontal')+
+  scale_color_jco(name = element_blank())+
+  lims(x = c(-1, 1), y = c(-1.5, 1))
+nmds_OM
+
+# by mesh size
+nmds_mesh = ggplot(data = df, 
+                           aes(x = x, y = y))+                             
+  geom_point(size = 2, aes(color = Mesh)) + 
+  geom_path(data = ell_mesh_12, 
+            aes(x = x, y = y, color = Mesh),
+            size = 1)+
+  labs(x = "NMDS axis 1", 
+       y = "NMDS axis 2")+
+  guides(color = guide_legend(ncol = 2))+
+  theme(legend.position = c(0.6, 0.1),
+        legend.background = element_blank(),
+        legend.direction = 'horizontal')+
+  scale_color_jco(name = element_blank())+
+  lims(x = c(-1, 1), y = c(-1.5, 1))
+nmds_mesh
+
+# combine plots
+plot_grid(nmds_vect, nmds_reaches,
+          nmds_OM, nmds_mesh,
+          align = 'hv',
+          labels = 'auto', label_fontface = 'plain')
+```
+
+# Table 4
+Effect size values, measured as Hedge's g.
+```{r effect-sizes,warning=FALSE, echo=TRUE}
+
+# Macroinvertebrate abundance
+fam_long = 
+  macro_fam %>%
+  pivot_longer(cols = Chironomidae:Water.Mite,
+               names_to = 'family', values_to = 'count') %>%
+  dplyr::select(Sample:Reach, Reaches, family, count)
+
+cohen.d(data = fam_long %>% 
+          dplyr::filter(Site == "Carapa"),
+        count ~ Reach, na.rm = TRUE,
+        hedges.correction = TRUE,
+        conf.level = 0.95)
+
+cohen.d(data = fam_long %>% 
+          dplyr::filter(Site == "ArbSeep"),
+        count ~ Reach, na.rm = TRUE,
+        hedges.correction = TRUE,
+        conf.level = 0.95)
+
+# Macroinvertebrate richness
+cohen.d(data = macro_fam %>% 
+          dplyr::filter(Site == "Carapa"),
+        numFam ~ Reach, na.rm = TRUE,
+        hedges.correction = TRUE,
+        conf.level = 0.95)
+
+cohen.d(data = macro_fam %>% 
+          dplyr::filter(Site == "ArbSeep"),
+        numFam ~ Reach, na.rm = TRUE,
+        hedges.correction = TRUE,
+        conf.level = 0.95)
+
+# leaf litter decomposition rates
+cohen.d(data = dplyr::filter(OM, Stream == "Carapa"),
+        k_LL_d ~ Treatment, na.rm = TRUE,
+        hedges.correction = TRUE,
+        conf.level = 0.95)
+
+cohen.d(data = dplyr::filter(OM, Stream == "Arb Seep"),
+        k_LL_d ~ Treatment, na.rm = TRUE,
+        hedges.correction = TRUE,
+        conf.level = 0.95)
+
+# CWD decomposition rates
+cohen.d(data = dplyr::filter(OM, Stream == "Carapa"),
+        k_CWD_yr ~ Treatment, na.rm = TRUE,
+        hedges.correction = TRUE,
+        conf.level = 0.95)
+
+cohen.d(data = dplyr::filter(OM, Stream == "Arb Seep"),
+        k_CWD_yr ~ Treatment, na.rm = TRUE,
+        hedges.correction = TRUE,
+        conf.level = 0.95)
+
+# Chironomid %growth
+cohen.d(data = chiroGrowth %>% 
+          dplyr::filter(Reach %in% c("Carapa Upstream", "Carapa Downstream")),
+        delBiomass_per ~ Reach, 
+        na.rm = TRUE,
+        hedges.correction = TRUE,
+        conf.level = 0.95)
+
+cohen.d(data = chiroGrowth %>% 
+          dplyr::filter(Reach %in% c("ArbSeep Upstream", "ArbSeep Downstream")),
+        delBiomass_per ~ Reach,
+        hedges.correction = TRUE,
+        conf.level = 0.95)
+``` 
+
+# Session Info
+```{r session-info}
+pander(sessionInfo())
+```
