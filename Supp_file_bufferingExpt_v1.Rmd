@@ -620,7 +620,7 @@ Effect size values, measured as Hedges' g.
 # Macroinvertebrate abundance
 fam_long <- 
   macro_fam %>%
-  pivot_longer(cols = Chironomidae:Water.Mite,
+  pivot_longer(cols = Chironomidae:Hydracarina,
                names_to = 'family', values_to = 'count') %>%
   dplyr::select(Sample:Reach, Reaches, family, count)
 
