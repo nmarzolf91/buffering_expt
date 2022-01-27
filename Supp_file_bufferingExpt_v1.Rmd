@@ -3,12 +3,7 @@ title: "Data for: Do experimental pH increases alter the structure and function 
 author: "Nicholas S. Marzolf"
 date: "Updated January 26, 2022"
 output: 
-  html_document:
-    toc: true
-    toc_depth: 3
-    toc_float: 
-      collapsed: true
-      smooth_scroll: false
+  pdf_document:
 ---
 
 ```{r setup, include=FALSE}
@@ -487,7 +482,7 @@ nmds_vect
 Now we will calculate 95% confidence interval ellipses for the four study reaches, two mesh bag sizes, and 2 organic matter types, and plot the ellipses on the NMDS to determine the similarity of the assemblage as explained by those treatments. We will need the veganCovEllipse.R function to help us. Briefly, we will create a dummy data frame that is run through a for loop that calculates the 95% CI ellipse for the treatment factor of interest. For the sake of space, I will show the process for the first 2 axes (x and y) but can repeated to visualize the NMDS using other axes (substitute y for x to change from axis 2 to 1, and substitute z for y to change from axis 2 to axis 3):
 ```{r, nmds-ellipses, warning=FALSE, echo=TRUE}
 
-source('veganCovEllipse.R')
+# source('veganCovEllipse.R')
 
 ell_reaches_12 <- data.frame() # create a dummy data frame for ellipses based on reach for axes 1 and 2
 
