@@ -1,4 +1,4 @@
-# Github repository for: Do experimental pH increases alter the structure and function of a lowland tropical stream? 
+# Data for: Do experimental pH increases alter the structure and function of a lowland tropical stream? 
 DOI: https://doi.org/10.1002/ecs2.4097
 
 Data files are contained in data/ as csv files  
